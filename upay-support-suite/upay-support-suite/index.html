@@ -44,6 +44,7 @@
 <section class="view" id="v-his">
   <h2 class="pg">হিস্টরি</h2>
   <div class="pad" style="padding-bottom:0"><button class="chip on" data-f="all">সব</button><button class="chip" data-f="in">ইনকাম</button><button class="chip" data-f="out">খরচ</button></div>
+  <div class="pad" style="padding-bottom:0"><input id="hq" placeholder="ফোন, নাম বা ট্রানজেকশন আইডি দিয়ে খুঁজুন"></div>
   <div class="card" id="hlist"></div>
 </section>
 
@@ -53,15 +54,16 @@
     <h2>আমার upay</h2>
     <div class="mprof">
       <div class="pav" id="pav">র</div>
-      <div class="pinfo"><b id="uname2">রাহিম আহমেদ</b><span>01XXXXXXXXX</span></div>
+      <div class="pinfo"><b id="uname2">রাহিম আহমেদ</b><span>01XXXXXXXXX</span><i class="abadge" id="abadge"></i></div>
       <button class="pen" id="penBtn" aria-label="প্রোফাইল এডিট" data-toast="প্রোফাইল এডিট শিগগিরই আসছে">✎</button>
     </div>
   </div>
 
   <div class="msec">সাধারণ</div>
   <div class="mlist">
-    <div class="row" data-toast="ভাষা: বাংলা"><span class="mi">🌐</span><div class="g">ভাষা</div><em>বাংলা</em></div>
-    <div class="row" data-toast="অ্যাকাউন্টের ধরন: ব্যক্তিগত"><span class="mi">👤</span><div class="g">অ্যাকাউন্টের ধরন</div><em>ব্যক্তিগত</em></div>
+    <div class="row" id="langRow"><span class="mi">🌐</span><div class="g">ভাষা</div><em id="langVal" translate="no">বাংলা</em></div>
+    <div class="row" id="planRow" style="display:none"><span class="mi">🎓</span><div class="g">স্টুডেন্ট প্ল্যান<small>বাজেট ক্যাটাগরি, অটো ট্রান্সফার</small></div><i class="chev">›</i></div>
+    <div class="row" id="acctRow"><span class="mi">👤</span><div class="g">অ্যাকাউন্টের ধরন</div><em id="acctVal">ব্যক্তিগত</em></div>
     <div class="row" id="themeRow"><span class="mi">🌙</span><div class="g">ডার্ক মোড<small id="themeState">বন্ধ</small></div><i class="chev">›</i></div>
     <div class="row" data-toast="পিন পরিবর্তন শিগগিরই আসছে"><span class="mi">🔒</span><div class="g">পিন পরিবর্তন</div><i class="chev">›</i></div>
     <div class="row" data-toast="সিকিউরিটি: PIN সক্রিয়"><span class="mi">🛡️</span><div class="g">সিকিউরিটি<small>PIN, বায়োমেট্রিক</small></div><i class="chev">›</i></div>
