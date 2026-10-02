@@ -36,3 +36,11 @@ Student benefits (demo rules, edit constants in app.js)
 - Cash Out fee: base 1.85%, verified student accounts get 20% off the fee (feeOf). Send Money fee: 0.
 - History: search by phone/name/transaction ID; each row shows day, date, time, phone, receiver name (from saved accounts) and transaction ID.
 - More > Student Plan (verified students only): money buckets (set money aside per category, pay from a bucket) and auto transfer (saved account + date/time; sends automatically when money arrives).
+
+Round 2 features
+- Every wallet gets a demo phone number (More > profile). Send Money to another wallet's number credits that user and shows their real name.
+- Wrong-number protection: Send Money shows recipient name (or a warning if not found) before sending, then a 2-minute Cancel banner that returns the money if the recipient has not spent it.
+- Guardian Link (More): a student adds a guardian's number, guardian approves from the bell, then can send money into a student's bucket and view their last 15 transactions.
+- Bill Split (home grid): enter total + friends' numbers; each gets a request (bell) to Pay or decline.
+- Auto transfer can repeat monthly; History page has a This-month summary by category.
+- Needs 2+ wallets (open the app with different ?u= users) to try guardian / split / send between users.
