@@ -149,3 +149,15 @@ body.admin nav{flex-wrap:wrap}body.admin .wrap{padding-bottom:30px}
 .mi.fb{background:#1877f2;color:#fff;font:700 22px/1 Arial,sans-serif}
 .chev{font-style:normal;color:var(--mute);font-size:26px;line-height:1}
 .mlist .row:active{background:var(--line)}
+
+/* ---- Account type / language / student form ---- */
+.panel{max-height:88vh;overflow-y:auto}
+.panel label{display:block;font-size:14px;color:var(--mute);margin:10px 0 4px}
+.panel label.chk{display:flex;gap:8px;align-items:flex-start;color:var(--ink);font-size:14px;margin:12px 0}
+.panel label.chk input{width:auto;margin:3px 0 0}
+.gbox{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:10px;padding:10px 12px;font-size:14px;margin:6px 0 8px;line-height:1.5}
+.rej{background:#ffe3e3;color:#7a1f1f;border-radius:10px;padding:10px 12px;font-size:14px;margin:8px 0}
+:root[data-theme="dark"] .rej{background:#4a1f1f;color:#ffd6d6}
+.idimg{max-width:100%;max-height:150px;border-radius:8px;display:block;margin:6px 0}
+.ck{margin-left:auto;color:#0b6b3c;font-style:normal;font-weight:700;font-size:20px}
+.abadge{display:none;margin-top:4px;background:#ffffffaa;border-radius:10px;padding:1px 10px;font-size:13px;font-weight:600;font-style:normal;color:#1c2230}
