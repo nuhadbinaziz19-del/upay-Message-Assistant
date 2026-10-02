@@ -45,6 +45,7 @@
   <h2 class="pg">হিস্টরি</h2>
   <div class="pad" style="padding-bottom:0"><button class="chip on" data-f="all">সব</button><button class="chip" data-f="in">ইনকাম</button><button class="chip" data-f="out">খরচ</button></div>
   <div class="pad" style="padding-bottom:0"><input id="hq" placeholder="ফোন, নাম বা ট্রানজেকশন আইডি দিয়ে খুঁজুন"></div>
+  <div class="card" id="msum"></div>
   <div class="card" id="hlist"></div>
 </section>
 
@@ -62,6 +63,7 @@
   <div class="msec">সাধারণ</div>
   <div class="mlist">
     <div class="row" id="langRow"><span class="mi">🌐</span><div class="g">ভাষা</div><em id="langVal" translate="no">বাংলা</em></div>
+    <div class="row" id="gRow"><span class="mi">👨‍👩‍👧</span><div class="g">অভিভাবক লিংক<small>অভিভাবক থেকে টাকা, স্টেটমেন্ট শেয়ার</small></div><i class="chev">›</i></div>
     <div class="row" id="planRow" style="display:none"><span class="mi">🎓</span><div class="g">স্টুডেন্ট প্ল্যান<small>বাজেট ক্যাটাগরি, অটো ট্রান্সফার</small></div><i class="chev">›</i></div>
     <div class="row" id="acctRow"><span class="mi">👤</span><div class="g">অ্যাকাউন্টের ধরন</div><em id="acctVal">ব্যক্তিগত</em></div>
     <div class="row" id="themeRow"><span class="mi">🌙</span><div class="g">ডার্ক মোড<small id="themeState">বন্ধ</small></div><i class="chev">›</i></div>
@@ -85,6 +87,7 @@
   </div>
 </section>
 
+<div id="undo" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:84px;width:calc(100% - 24px);max-width:456px;z-index:30;background:#102a54;color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;align-items:center;gap:10px"><span id="undoT" style="flex:1"></span><button class="mini" id="undoB">বাতিল করুন</button></div>
 <nav class="nav">
   <button class="t on" data-tab="home"><span>🏠</span>হোম</button>
   <button class="t" data-tab="acc"><span>👛</span>অ্যাকাউন্ট</button>
