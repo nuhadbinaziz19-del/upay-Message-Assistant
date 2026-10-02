@@ -68,15 +68,15 @@ function makeMessage(text,id,faqs){const a=analyze(text,faqs),t=ts();return{id,w
 
 /* ---------- Shared storage (localStorage + cross-tab sync). Swap with a real API later. ---------- */
 function makeDb(){
-  const K='upay_db',rd=()=>{try{return JSON.parse(localStorage.getItem(K)||'{}')}catch(e){return{}}},wr=o=>{try{localStorage.setItem(K,JSON.stringify(o))}catch(e){}};
+  const K='upay_db',rd=()=>{try{return JSON.parse(localStorage.getItem(K)||'{}')}catch(e){return{}}},wr=o=>{try{localStorage.setItem(K,JSON.stringify(o));return true}catch(e){return false}};
   const subs=new Set(),fire=()=>subs.forEach(f=>{try{f()}catch(e){console.error(e)}}),clone=x=>x===undefined?x:JSON.parse(JSON.stringify(x));
   addEventListener('storage',e=>{if(e.key===K)fire()});
   const snap=(p,o)=>({id:p.split('/').pop(),exists:o!==undefined,data:()=>clone(o)});
   const listen=(get,cb)=>{const run=()=>cb(get());subs.add(run);run();return()=>subs.delete(run)};
   const ref=p=>({id:p.split('/').pop(),path:p,
     get:async()=>snap(p,rd()[p]),
-    set:async d=>{const o=rd();o[p]=clone(d);wr(o);fire()},
-    update:async d=>{const o=rd();if(o[p]===undefined)throw{code:'not_found'};o[p]={...o[p],...clone(d)};wr(o);fire()},
+    set:async d=>{const o=rd();o[p]=clone(d);if(!wr(o))throw{code:'quota'};fire()},
+    update:async d=>{const o=rd();if(o[p]===undefined)throw{code:'not_found'};o[p]={...o[p],...clone(d)};if(!wr(o))throw{code:'quota'};fire()},
     delete:async()=>{const o=rd();delete o[p];wr(o);fire()},
     onSnapshot:cb=>listen(()=>snap(p,rd()[p]),cb)});
   const col=(c,flt=[])=>{
@@ -125,8 +125,8 @@ function initCustomer(){
   // toast
   let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),1800)}
   $$('[data-toast]').forEach(e=>e.onclick=()=>toast(e.dataset.toast));
-  $('#chatBtn').onclick=()=>window.openChat&&window.openChat();
-  $('#supRow').onclick=()=>window.openChat&&window.openChat();
+  $('#chatBtn').onclick=()=>window.openCS&&window.openCS();
+  $('#supRow').onclick=()=>window.openCS&&window.openCS();
   $('#bell').onclick=()=>toast('নতুন কোনো নোটিফিকেশন নেই');
   
   // balance
@@ -179,6 +179,8 @@ function initCustomer(){
   }
   
     /* ---------- Customer live chat (AI assistant answers safe questions, rest go to an agent) ---------- */
+    let dots={chat:0,req:0};
+    const paintDot=()=>{$('#chDot').style.display=dots.chat||dots.req?'block':'none'};
     function chatInit(){
       let chat=null,FQ=[];const box=$('#chMsgs');
       sync.faqs.onSnapshot(d=>{const x=d.data();FQ=(x&&x.list)||[]});
@@ -189,7 +191,7 @@ function initCustomer(){
           +ms.map(m=>m.f==='sys'?`<div class="m sy">${esc(m.t)}</div>`:`<div class="m ${m.f==='cu'?'me':'ot'}">${esc(m.t)}${m.f==='cu'?'':`<small>${m.f==='ai'?'সহকারী':'এজেন্ট'}</small>`}</div>`).join('');
         box.scrollTop=box.scrollHeight;
         const open=$('#chat').classList.contains('on'),u=(chat&&chat.unreadCust)||0;
-        $('#chDot').style.display=u&&!open?'block':'none';
+        dots.chat=u&&!open?1:0;paintDot();
         if(open&&u)sync.chats.doc(uid).update({unreadCust:0});
       }
       window.openChat=()=>{$('#chat').classList.add('on');paint();$('#chIn').focus()};
@@ -206,12 +208,88 @@ function initCustomer(){
       $('#chSend').onclick=send;$('#chIn').onkeydown=e=>{if(e.key==='Enter')send()};
     }
   
+    /* ---------- Customer Service hub: live chat, email, complaint (photo / voice) ---------- */
+    function csInit(){
+      let view='menu',EM=[],CP=[],photo=null,voice=null,rec=null,recT=null,recSec=0;
+      const body=$('#csBody'),TT={menu:'কাস্টমার সার্ভিস',email:'ইমেইল করুন',comp:'অভিযোগ জানান',mine:'আমার অনুরোধ'};
+      const CATS=['ট্রানজেকশন সমস্যা','ভুল নম্বরে টাকা পাঠানো','প্রতারণা / স্ক্যাম','অ্যাকাউন্ট লক বা পিন সমস্যা','অ্যাপ বা সার্ভিস সমস্যা','অন্যান্য'];
+      const SS={new:['নতুন','n'],open:['প্রক্রিয়াধীন','o'],resolved:['সমাধান হয়েছে','r']};
+      const mine=()=>[...EM.map(x=>({...x,k:'e'})),...CP.map(x=>({...x,k:'c'}))].sort((a,b)=>b.ts-a.ts);
+      const isOpen=()=>$('#cs').classList.contains('on');
+      const newId=p=>p+Date.now()+Math.random().toString(36).slice(2,6);
+      let busy=false;
+      function markRead(){if(busy)return;busy=true;try{EM.filter(x=>x.unreadCust).forEach(x=>sync.emails.doc(x.id).update({unreadCust:0}));CP.filter(x=>x.unreadCust).forEach(x=>sync.complaints.doc(x.id).update({unreadCust:0}))}finally{busy=false}}
+      function upd(){dots.req=[...EM,...CP].some(x=>x.unreadCust)&&!(isOpen()&&view==='mine')?1:0;paintDot();if(isOpen()&&view==='mine')markRead();if(isOpen()&&(view==='menu'||view==='mine'))paint()}
+      sync.emails.where('uid','==',uid).onSnapshot(q=>{EM=q.docs.map(d=>({id:d.id,...d.data()}));upd()});
+      sync.complaints.where('uid','==',uid).onSnapshot(q=>{CP=q.docs.map(d=>({id:d.id,...d.data()}));upd()});
+      function go(v){if(rec)rec.stop();view=v;if(v==='mine')markRead();paint();upd()}
+      window.openCS=()=>{view='menu';$('#cs').classList.add('on');paint();upd()};
+      $('#csBack').onclick=()=>{if(view==='menu'){if(rec)rec.stop();$('#cs').classList.remove('on')}else go('menu')};
+  
+      function paint(){
+        $('#csTitle').textContent=TT[view];const q=mine().length;
+        if(view==='menu')body.innerHTML=`<div class="opt" data-go="chat"><span>💬</span><div><b>লাইভ চ্যাট</b><small>এখনই আমাদের সাথে কথা বলুন</small></div></div>
+          <div class="opt" data-go="email"><span>✉️</span><div><b>ইমেইল করুন</b><small>চ্যাট না করে ইমেইলে জানান</small></div></div>
+          <div class="opt" data-go="comp"><span>📝</span><div><b>অভিযোগ জানান</b><small>ছবি বা ভয়েসসহ সমস্যা জমা দিন</small></div></div>
+          <div class="opt" data-go="mine"><span>📂</span><div><b>আমার অনুরোধ</b><small>${q?bn(q)+'টি জমা দেওয়া আছে':'ইমেইল ও অভিযোগের অবস্থা দেখুন'}</small></div>${dots.req?'<i class="rdot"></i>':''}</div>
+          <p class="hint">জরুরি অবস্থায় (প্রতারণা, ভুল লেনদেন) অভিযোগ বা লাইভ চ্যাট ব্যবহার করুন। পিন বা ওটিপি কাউকে দেবেন না।</p>`;
+        if(view==='email')body.innerHTML=`<label for="eEm">আপনার ইমেইল (উত্তর পেতে, ঐচ্ছিক)</label><input id="eEm" type="email" placeholder="name@example.com">
+          <label for="eSu">বিষয়</label><input id="eSu" maxlength="120"><label for="eBd">বিস্তারিত</label><textarea id="eBd" rows="7"></textarea>
+          <button class="btn" id="eGo">ইমেইল পাঠান</button><p class="hint">আপনার উত্তর এই অ্যাপের "আমার অনুরোধ"-এ দেখতে পাবেন।</p>`;
+        if(view==='comp')body.innerHTML=`<label for="cCt">অভিযোগের ধরন</label><select id="cCt">${CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+          <label for="cTx">ট্রানজেকশন আইডি (থাকলে)</label><input id="cTx" maxlength="20">
+          <label for="cDs">সমস্যাটি বলুন</label><textarea id="cDs" rows="5" placeholder="কী হয়েছে, কখন হয়েছে…"></textarea>
+          <div class="att"><button class="mini" id="cPh" type="button">📷 ছবি যোগ করুন</button> <button class="mini" id="cVo" type="button">🎤 ভয়েস রেকর্ড</button><input type="file" id="cPf" accept="image/*" hidden></div>
+          <div id="cPv"></div><button class="btn" id="cGo">অভিযোগ জমা দিন</button><p class="hint">ছবি বা ভয়েস ঐচ্ছিক। ভয়েস সর্বোচ্চ ৪৫ সেকেন্ড।</p>`;
+        if(view==='mine')body.innerHTML=q?mine().map(x=>`<div class="rq"><div><span class="tg ${SS[x.status][1]}">${SS[x.status][0]}</span> <span class="tg">${x.k==='e'?'ইমেইল':'অভিযোগ'}</span></div><b>${esc(x.k==='e'?x.subject:x.cat)}</b><small>${fd(x.ts)} · রেফারেন্স ${x.k==='e'?'E':'C'}-${esc(x.id.slice(-5).toUpperCase())}</small><p>${esc((x.body||'').slice(0,140))} ${x.photo?'📷':''} ${x.voice?'🎤':''}</p>${(x.replies||[]).map(r=>`<div class="rp"><small>সাপোর্ট · ${fd(r.ts)}</small>${esc(r.t)}</div>`).join('')}</div>`).join(''):'<p class="hint">এখনো কিছু জমা দেননি।</p>';
+        if(view==='comp')pv();
+      }
+      function pv(){const el=$('#cPv');if(!el)return;
+        el.innerHTML=(photo?`<div class="pvb"><img src="${photo}" alt="সংযুক্ত ছবি"><button class="mini" data-x="ph" type="button">মুছুন</button></div>`:'')
+         +(rec?`<div class="pvb"><i class="recd"></i> রেকর্ড হচ্ছে… ${bn(recSec)} সে. <button class="mini" data-x="stop" type="button">থামুন</button></div>`:'')
+         +(voice&&!rec?`<div class="pvb"><audio controls src="${voice}"></audio><button class="mini" data-x="vo" type="button">মুছুন</button></div>`:'');
+        const b=$('#cVo');if(b)b.textContent=rec?'⏹ থামুন':'🎤 ভয়েস রেকর্ড'}
+      const shrink=(f,mx=900)=>new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,mx/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.65))};im.src=r.result};r.readAsDataURL(f)});
+      async function recToggle(){
+        if(rec){rec.stop();return}
+        if(!navigator.mediaDevices||!window.MediaRecorder){toast('এই ব্রাউজারে ভয়েস রেকর্ড চলবে না');return}
+        try{const s=await navigator.mediaDevices.getUserMedia({audio:true}),ch=[];rec=new MediaRecorder(s);
+          rec.ondataavailable=e=>{if(e.data.size)ch.push(e.data)};
+          rec.onstop=()=>{clearInterval(recT);s.getTracks().forEach(t=>t.stop());const blob=new Blob(ch,{type:(rec&&rec.mimeType)||'audio/webm'});rec=null;
+            const r=new FileReader();r.onload=()=>{if(r.result.length>900000){toast('রেকর্ডিং বড় হয়ে গেছে, ছোট করে আবার দিন');voice=null}else voice=r.result;pv()};r.readAsDataURL(blob);pv()};
+          rec.start();recSec=0;recT=setInterval(()=>{recSec++;pv();if(recSec>=45&&rec)rec.stop()},1000);pv();
+        }catch(e){rec=null;toast('মাইক্রোফোনের অনুমতি পাওয়া যায়নি')}}
+      async function submitEmail(){
+        const em=$('#eEm').value.trim(),su=$('#eSu').value.trim(),bd=$('#eBd').value.trim();
+        if(!su||!bd){toast('বিষয় ও বিস্তারিত লিখুন');return}
+        if(em&&!/^\S+@\S+\.\S+$/.test(em)){toast('ইমেইল ঠিকানা ঠিক নয়');return}
+        const id=newId('e');
+        try{await sync.emails.doc(id).set({id,uid,name:$('#uname').textContent,ts:Date.now(),status:'new',email:em,subject:analyze(su).shown,body:analyze(bd).shown,replies:[],unreadCust:0});toast('ইমেইল পাঠানো হয়েছে ✓');go('mine')}
+        catch(e){toast('পাঠানো যায়নি, আবার চেষ্টা করুন')}}
+      async function submitComp(){
+        if(rec){toast('আগে রেকর্ডিং থামান');return}
+        const d=$('#cDs').value.trim(),cat=$('#cCt').value;
+        if(!d&&!photo&&!voice){toast('সমস্যা লিখুন, অথবা ছবি/ভয়েস দিন');return}
+        const a=analyze(d||cat),scam=cat===CATS[2]||a.intent==='scam',known=a.intent!=='unknown';
+        const id=newId('c');
+        try{await sync.complaints.doc(id).set({id,uid,name:$('#uname').textContent,ts:Date.now(),status:'new',cat,txn:$('#cTx').value.trim(),body:a.shown,pri:scam?'urgent':known?a.pri:'normal',team:scam?'Fraud Team':known?a.team:'Support Agents',photo:photo||'',voice:voice||'',replies:[],unreadCust:0});
+          photo=voice=null;toast('অভিযোগ জমা হয়েছে। রেফারেন্স C-'+id.slice(-5).toUpperCase());go('mine')}
+        catch(e){toast('ফাইল বড় হওয়ায় জমা হয়নি। ছোট ছবি/ভয়েস দিন')}}
+      body.addEventListener('click',async e=>{
+        const g=e.target.closest('[data-go]');if(g){g.dataset.go==='chat'?window.openChat():go(g.dataset.go);return}
+        const x=e.target.closest('[data-x]');if(x){const k=x.dataset.x;if(k==='ph')photo=null;if(k==='vo')voice=null;if(k==='stop'&&rec)rec.stop();pv();return}
+        const b=e.target.closest('button');if(!b)return;
+        if(b.id==='eGo')submitEmail();if(b.id==='cGo')submitComp();if(b.id==='cVo')recToggle();if(b.id==='cPh')$('#cPf').click()});
+      body.addEventListener('change',async e=>{if(e.target.id!=='cPf'||!e.target.files[0])return;
+        try{photo=await shrink(e.target.files[0]);pv()}catch(_){toast('ছবিটি পড়া যায়নি')}e.target.value=''});
+    }
+  
   (async()=>{try{
     if(!window.claude)return;
     const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
     if(!db||!user)return;
     uid=await user.id();const me=await user.me();isAdm=await user.canEdit();
-    sync={wallets:db.collection('wallets'),txs:db.collection('txs'),cfg:db.doc('config/app'),chats:db.collection('chats'),faqs:db.doc('config/faqs')};
+    sync={wallets:db.collection('wallets'),txs:db.collection('txs'),cfg:db.doc('config/app'),chats:db.collection('chats'),faqs:db.doc('config/faqs'),emails:db.collection('emails'),complaints:db.collection('complaints')};
     const ref=sync.wallets.doc(uid);
     if(!(await ref.get()).exists)await ref.set({name:me.name||'গ্রাহক',balance:12500,frozen:false,createdAt:Date.now()});
     ref.onSnapshot(d=>{const w=d.data();if(!w)return;balance=w.balance||0;frozen=!!w.frozen;
@@ -220,7 +298,7 @@ function initCustomer(){
     sync.txs.where('uid','==',uid).onSnapshot(q=>{tx=q.docs.map(d=>d.data()).sort((a,b)=>b.ts-a.ts).map(x=>({...x,d:fd(x.ts),k:x.a>0?'in':'out'}));paintHis()});
     sync.cfg.onSnapshot(d=>{const c=d.data();const n=$('#note');
       if(c&&c.text){n.style.display='block';n.textContent='📢 '+c.text;if(c.ts>lastNote&&lastNote)toast('নতুন ঘোষণা');lastNote=c.ts}else n.style.display='none'});
-    chatInit();
+    chatInit();csInit();
   }catch(e){console.error(e)}})();
   
   paintBal();paintHis();
@@ -231,8 +309,9 @@ function initCustomer(){
 function initAdmin(){
   const root=$('#root');
   const ST={auto_sent:['Auto-replied','ok'],needs_review:['Needs review','warn'],escalated:['Escalated','bad'],agent_sent:['Sent by agent','info']};
-  const TABS=[['chat','Live chat'],['cus','Customers'],['txn','Transactions'],['faq','My FAQ'],['pol','Reply policies'],['ann','Announcement']];
-  let tab='chat',sel=null,W=[],T=[],C=[],faqs=[],note='',modal=null,msg='',cols,cfg,fqd;const ui={};
+  const TABS=[['chat','Live chat'],['mail','Emails'],['comp','Complaints'],['cus','Customers'],['txn','Transactions'],['faq','My FAQ'],['pol','Reply policies'],['ann','Announcement']];
+  let tab='chat',sel=null,W=[],T=[],C=[],M=[],X=[],selM=null,selX=null,faqs=[],note='',modal=null,msg='',cols,cfg,fqd;const ui={};
+  const nw=a=>a.filter(x=>x.status==='new').length;
   const chatOf=id=>C.find(c=>c.id===id),st=s=>ST[s]||['Open','info'];
 
   function vChat(){
@@ -255,6 +334,21 @@ function initAdmin(){
       <p class="lead" style="margin:12px 0 4px">Audit trail</p><ul class="why">${(c.audit||[]).map(x=>`<li><span>${esc(x)}</span></li>`).join('')}</ul></div>`:'<div class="card"></div>';
     return `<div class="cols">${list}${thr}${an}</div>`;
   }
+  function vReq(k){
+    const isC=k==='comp',L=(isC?X:M).slice().sort((a,b)=>b.ts-a.ts),cur=isC?selX:selM,r=L.find(x=>x.id===cur)||L[0];
+    const SS={new:['New','warn'],open:['In progress','info'],resolved:['Resolved','ok']};
+    const list=`<div class="card"><h3>${isC?'Complaints':'Emails'}</h3><p class="lead">${isC?'Submitted from the app, with an optional photo or voice note.':'Customers who prefer email over live chat.'}</p>${L.length?`<ul class="list">${L.map(x=>`<li tabindex="0" data-a="rsel" data-v="${k}" data-id="${esc(x.id)}" aria-selected="${!!r&&x.id===r.id}"><span class="tag ${SS[x.status][1]}">${SS[x.status][0]}</span>${isC?`<span class="tag ${x.pri==='urgent'?'bad':x.pri==='high'?'warn':'info'}">${esc(x.pri)}</span>`:''}${x.photo?'📷 ':''}${x.voice?'🎤 ':''}<b>${esc(isC?x.cat:x.subject)}</b><small>${esc(x.name)} · ${fd(x.ts)}</small></li>`).join('')}</ul>`:'<p class="lead">Nothing here yet. Submit one from the customer app.</p>'}</div>`;
+    if(!r)return `<div class="cols2">${list}<div class="card"><p class="lead">Select an item.</p></div></div>`;
+    const at=`data-v="${k}" data-id="${esc(r.id)}"`;
+    return `<div class="cols2">${list}<div class="card"><h3>${esc(isC?r.cat:r.subject)} <span class="tag ${SS[r.status][1]}">${SS[r.status][0]}</span></h3>
+      <p class="lead">${esc(r.name)} · ${fd(r.ts)} · Ref ${isC?'C':'E'}-${esc(r.id.slice(-5).toUpperCase())}${r.email?' · '+esc(r.email):''}${r.txn?' · Txn '+esc(r.txn):''}</p>
+      ${isC?`<p><span class="tag info">Route: ${esc(r.team)}</span></p>`:''}
+      <div class="bub cu">${esc(r.body||'(no text)')}</div>
+      ${r.photo?`<div class="att"><img src="${r.photo}" alt="Attached photo"></div>`:''}${r.voice?`<div class="att"><audio controls src="${r.voice}"></audio></div>`:''}
+      ${(r.replies||[]).map(p=>`<div class="bub ai">${esc(p.t)}<small style="display:block;opacity:.7">Agent · ${fd(p.ts)}</small></div>`).join('')}
+      <label for="rr">Reply</label><textarea id="rr" data-k="rreply" rows="4">${esc(ui.rreply||'')}</textarea>
+      <button class="btn" data-a="rsend" ${at}>Send reply</button><button class="btn alt" data-a="rst" data-s="open" ${at}>Mark in progress</button><button class="btn alt" data-a="rst" data-s="resolved" ${at}>Mark resolved</button>
+      ${r.email?`<a class="btn alt" style="display:inline-block;text-decoration:none" href="mailto:${esc(r.email)}?subject=${encodeURIComponent('Re: '+(r.subject||r.cat))}">Open in email app</a>`:''}</div></div>`}
   const vCus=()=>`<div class="card"><h3>Customers</h3><p class="lead">Everyone who opens the customer app appears here live. Freeze, adjust a balance, or delete.</p>${W.length?W.map(w=>`<div class="ar"><div class="g"><b>${esc(w.name)}</b> <span class="tag ${w.frozen?'bad':'ok'}">${w.frozen?'Frozen':'Active'}</span><small>${esc(w.id.slice(0,12))} · ${money(w.balance||0)}</small></div><button class="btn alt" data-a="frz" data-id="${esc(w.id)}">${w.frozen?'Unfreeze':'Freeze'}</button><button class="btn alt" data-a="adj" data-id="${esc(w.id)}">Balance</button><button class="btn alt" data-a="del" data-id="${esc(w.id)}">Delete</button></div>`).join(''):'<p class="lead">No customers yet.</p>'}</div>`;
   const vTxn=()=>{const L=T.slice().sort((a,b)=>b.ts-a.ts);return `<div class="card"><h3>Transactions</h3>${L.length?L.map(x=>`<div class="ar"><div class="g"><b>${esc(x.t)}</b><small>${esc(x.name)} · ${fd(x.ts)}</small></div><b class="${x.a>0?'pos':'neg'}">${x.a>0?'+':'−'}${money(Math.abs(x.a))}</b><button class="btn alt" data-a="rev" data-id="${esc(x.id)}">Reverse and delete</button></div>`).join(''):'<p class="lead">No transactions yet.</p>'}</div>`};
   const vFaq=()=>`<div class="g2"><div class="card"><h3>Add a common question</h3><p class="lead">When a customer asks it in chat, the assistant sends your answer.</p>
@@ -272,9 +366,9 @@ function initAdmin(){
   function render(){
     const ae=document.activeElement,aid=ae&&ae.dataset&&ae.dataset.k,n=s=>C.filter(c=>c.status===s).length,tot=W.reduce((x,w)=>x+(w.balance||0),0);
     let h=`<header><div class="logo">u</div><div><h1 style="font-size:24px;margin:0">upay Admin Console</h1><p>Live chat, AI-assisted replies, customers and transactions in one place.</p></div><span class="tag info" style="margin-left:auto">Demo · local data</span></header>
-    <div class="kpis">${[['Chats',C.length],['Auto-replied',n('auto_sent')],['Needs review',n('needs_review')],['Escalated',n('escalated')],['Customers',W.length],['Total balance',money(tot)]].map(([l,v])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('')}</div>
-    <nav>${TABS.map(([i,l])=>`<button data-a="tab" data-v="${i}" aria-selected="${tab===i}">${l}</button>`).join('')}</nav>`;
-    h+=({chat:vChat,cus:vCus,txn:vTxn,faq:vFaq,pol:vPol,ann:vAnn})[tab]();if(modal)h+=vModal();
+    <div class="kpis">${[['Chats',C.length],['Auto-replied',n('auto_sent')],['Needs review',n('needs_review')],['Escalated',n('escalated')],['New emails',nw(M)],['New complaints',nw(X)],['Customers',W.length],['Total balance',money(tot)]].map(([l,v])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('')}</div>
+    <nav>${TABS.map(([i,l])=>`<button data-a="tab" data-v="${i}" aria-selected="${tab===i}">${l}${i==='mail'&&nw(M)?' ('+nw(M)+')':i==='comp'&&nw(X)?' ('+nw(X)+')':''}</button>`).join('')}</nav>`;
+    h+=({chat:vChat,mail:()=>vReq('mail'),comp:()=>vReq('comp'),cus:vCus,txn:vTxn,faq:vFaq,pol:vPol,ann:vAnn})[tab]();if(modal)h+=vModal();
     root.innerHTML=h;
     if(aid){const e=root.querySelector(`[data-k="${aid}"]`);if(e){e.focus();try{e.setSelectionRange(e.value.length,e.value.length)}catch(_){}}}
     const t=root.querySelector('.thr');if(t)t.scrollTop=t.scrollHeight;
@@ -289,13 +383,17 @@ function initAdmin(){
       else if(a==='send'){const c=chatOf(sel),t=(ui.reply||'').trim();if(!c||!t)return;ui.reply='';
         await cols.chats.doc(sel).update({msgs:[...c.msgs,{f:'ag',t,ts:Date.now()}],status:'agent_sent',last:Date.now(),unreadCust:(c.unreadCust||0)+1,audit:[...(c.audit||[]),'Agent approved reply '+ts()]})}
       else if(a==='esc'){const c=chatOf(sel);await cols.chats.doc(sel).update({status:'escalated',audit:[...(c.audit||[]),'Escalated to '+c.a.team+' '+ts()]})}
+      else if(a==='rsel'){if(b.dataset.v==='comp')selX=id;else selM=id;ui.rreply='';render()}
+      else if(a==='rsend'){const t=(ui.rreply||'').trim();if(!t)return;const c=b.dataset.v==='comp',r=(c?X:M).find(x=>x.id===id);if(!r)return;ui.rreply='';
+        await (c?cols.complaints:cols.emails).doc(id).update({replies:[...(r.replies||[]),{t,ts:Date.now()}],status:r.status==='resolved'?'resolved':'open',unreadCust:(r.unreadCust||0)+1})}
+      else if(a==='rst'){await (b.dataset.v==='comp'?cols.complaints:cols.emails).doc(id).update({status:b.dataset.s})}
       else if(a==='frz'){const w=W.find(x=>x.id===id);await cols.wallets.doc(id).update({frozen:!w.frozen})}
       else if(a==='adj'||a==='del'){modal={type:a,id};ui.adjv='';render()}
       else if(a==='mno'){modal=null;render()}
       else if(a==='mok'){const w=W.find(x=>x.id===modal.id);
         if(modal.type==='adj'){const v=parseInt(ui.adjv);if(!v)return;const t='t'+Date.now();
           await cols.wallets.doc(w.id).update({balance:(w.balance||0)+v});await cols.txs.doc(t).set({id:t,uid:w.id,name:w.name,t:'Admin adjustment',a:v,ts:Date.now()})}
-        else{for(const x of T.filter(x=>x.uid===w.id))await cols.txs.doc(x.id).delete();await cols.chats.doc(w.id).delete();await cols.wallets.doc(w.id).delete()}
+        else{for(const x of T.filter(x=>x.uid===w.id))await cols.txs.doc(x.id).delete();for(const x of M.filter(x=>x.uid===w.id))await cols.emails.doc(x.id).delete();for(const x of X.filter(x=>x.uid===w.id))await cols.complaints.doc(x.id).delete();await cols.chats.doc(w.id).delete();await cols.wallets.doc(w.id).delete()}
         modal=null;render()}
       else if(a==='rev'){const x=T.find(t=>t.id===id),w=x&&W.find(q=>q.id===x.uid);if(w)await cols.wallets.doc(w.id).update({balance:(w.balance||0)-x.a});await cols.txs.doc(id).delete()}
       else if(a==='fadd'){const q=(ui.fq||'').trim(),an=(ui.fa||'').trim();if(!q||!an){msg='Write both the question and the answer.';render();return}
@@ -307,10 +405,12 @@ function initAdmin(){
   });
   (async()=>{
     const db=window.claude&&await claude.use('db');if(!db){root.textContent='Storage is not available in this browser.';return}
-    cols={wallets:db.collection('wallets'),txs:db.collection('txs'),chats:db.collection('chats')};cfg=db.doc('config/app');fqd=db.doc('config/faqs');
+    cols={wallets:db.collection('wallets'),txs:db.collection('txs'),chats:db.collection('chats'),emails:db.collection('emails'),complaints:db.collection('complaints')};cfg=db.doc('config/app');fqd=db.doc('config/faqs');
     cols.wallets.onSnapshot(q=>{W=q.docs.map(d=>({id:d.id,...d.data()}));render()});
     cols.txs.onSnapshot(q=>{T=q.docs.map(d=>d.data());render()});
     cols.chats.onSnapshot(q=>{C=q.docs.map(d=>({id:d.id,...d.data()}));render()});
+    cols.emails.onSnapshot(q=>{M=q.docs.map(d=>({id:d.id,...d.data()}));render()});
+    cols.complaints.onSnapshot(q=>{X=q.docs.map(d=>({id:d.id,...d.data()}));render()});
     cfg.onSnapshot(d=>{note=(d.data()||{}).text||'';render()});
     fqd.onSnapshot(d=>{faqs=((d.data()||{}).list)||[];render()});
     render();
