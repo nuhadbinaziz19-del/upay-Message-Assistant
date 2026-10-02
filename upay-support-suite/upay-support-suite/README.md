@@ -31,3 +31,8 @@ Account types (More > Account Type)
 - Student: needs admin approval. The customer fills the form, a request appears in admin > Student accounts, admin approves or rejects (a note is required to reject), and the customer sees the result in the app.
 - Admin > Student accounts > Application rules: edit the guidelines (English and Bangla), accepted email domains (default: edu, ac) and which items are required (edu email, university name, student ID number, ID card photo, selfie with ID).
 - NOTE: this is a browser-only demo, so the approval is not enforced by a server. For production, check acct/studentOK on the backend.
+
+Student benefits (demo rules, edit constants in app.js)
+- Cash Out fee: base 1.85%, verified student accounts get 20% off the fee (feeOf). Send Money fee: 0.
+- History: search by phone/name/transaction ID; each row shows day, date, time, phone, receiver name (from saved accounts) and transaction ID.
+- More > Student Plan (verified students only): money buckets (set money aside per category, pay from a bucket) and auto transfer (saved account + date/time; sends automatically when money arrives).
